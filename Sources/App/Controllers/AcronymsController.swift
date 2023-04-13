@@ -6,6 +6,7 @@
 //
 
 import Vapor
+import Fluent
 
 struct AcronymsController: RouteCollection {
     func boot(routes: Vapor.RoutesBuilder) throws {
@@ -16,6 +17,9 @@ struct AcronymsController: RouteCollection {
         acronymsRoutes.delete(":acronymID", use: deleteHandler)
         acronymsRoutes.put(":acronymID", use: updateHandler)
         acronymsRoutes.get(":acronymID", "user", use: getUserHandler)
+        acronymsRoutes.get(":acronymID", "categories", use: getCategoriesHandler)
+        acronymsRoutes.post(":acronymID", "categories", ":categoryID", use: addCategoriesHandler)
+        acronymsRoutes.get("search", use: searchHandler)
     }
 
     func getAllHandler(_ req: Request) throws -> EventLoopFuture<[Acronym]> {
@@ -64,6 +68,39 @@ struct AcronymsController: RouteCollection {
             .flatMap { acronym in
                 acronym.$user.get(on: req.db)
             }
+    }
+
+    func getCategoriesHandler(_ req: Request) throws -> EventLoopFuture<[Category]> {
+        Acronym.find(req.parameters.get("acronymID"), on: req.db)
+            .unwrap(or: Abort(.notFound))
+            .flatMap { acronym in
+                acronym.$categories.get(on: req.db)
+            }
+    }
+
+    func addCategoriesHandler(_ req: Request) throws -> EventLoopFuture<HTTPStatus> {
+        let acronymQuery = Acronym.find(req.parameters.get("acronymID"), on: req.db)
+            .unwrap(or: Abort(.notFound))
+        let categoryQuery = Category.find(req.parameters.get("categoryID"), on: req.db)
+            .unwrap(or: Abort(.notFound))
+
+        return acronymQuery.and(categoryQuery).flatMap { acronym, category in
+            acronym.$categories.attach(category, on: req.db)
+                .transform(to: .created)
+        }
+    }
+
+    func searchHandler(_ req: Request) throws -> EventLoopFuture<[Acronym]> {
+        guard let searchTerm = req.query[String.self, at: "term"] else { throw Abort(.badRequest)}
+
+//        return Acronym.query(on: req.db)
+//            .filter(\.$short == searchTerm)
+//            .all()
+        return Acronym.query(on: req.db)
+            .group(.or) { or in
+                or.filter(\.$short == searchTerm)
+                or.filter(\.$long == searchTerm)
+            }.all()
     }
 
 }

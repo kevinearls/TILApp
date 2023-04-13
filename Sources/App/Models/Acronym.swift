@@ -14,6 +14,9 @@ final class Acronym: Model {
     @Field(key: "long") var long: String
     @Parent(key: "userID") var user: User
 
+    @Siblings(through: AcronymCategoryPivot.self, from: \.$acronym, to: \.$category)
+    var categories: [Category]
+
     init() {}
 
     init(id: UUID? = nil, short:String, long: String, userID: User.IDValue) {
